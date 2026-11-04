@@ -31,13 +31,23 @@
 /* USER CODE END Includes */
 
 /* USER CODE BEGIN Private defines */
+#define I2C_OK 0U
+#define I2C_ERR_NACK 1U
+#define I2C_ERR_TIMEOUT 2U
+#define I2C_ERR_PARAM 3U
+#define I2C_MAX_TRANSFER 254U
+#define I2C_TIMEOUT 100000U
 
+ typedef enum{I2C_WAIT_TXIS,I2C_WAIT_RXNE,I2C_WAIT_TC,I2C_WAIT_STOP} i2c_wait_t;
 /* USER CODE END Private defines */
 
 void MX_I2C1_Init(void);
 
 /* USER CODE BEGIN Prototypes */
-uint8_t i2c_master_read_byte(uint8_t slave_address, uint8_t register_address);
+uint8_t i2c_master_read_byte(uint8_t slave_address, uint8_t register_address, uint8_t *data);
+uint8_t i2c_master_read_multi(uint8_t slave_address, uint8_t register_address, uint8_t *data, uint8_t length);
+uint8_t i2c_master_write_byte(uint8_t slave_address, uint8_t register_address, uint8_t data);
+uint8_t i2c_master_write_multi(uint8_t slave_address, uint8_t register_address, const uint8_t *data, uint8_t length);
 /* USER CODE END Prototypes */
 
 #ifdef __cplusplus
