@@ -23,6 +23,8 @@
 #ifndef __MAIN_H
 #define __MAIN_H
 
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -38,6 +40,7 @@ extern "C" {
 #include "stm32f3xx_ll_utils.h"
 #include "stm32f3xx_ll_pwr.h"
 #include "stm32f3xx_ll_dma.h"
+#include "stm32f3xx_ll_usart.h"
 #include "stm32f3xx_ll_gpio.h"
 
 #if defined(USE_FULL_ASSERT)
@@ -85,7 +88,9 @@ void Error_Handler(void);
                                                                  0 bit  for subpriority */
 #endif
 /* USER CODE BEGIN Private defines */
-
+#define MEASURE_PERIOD_MS 100U
+#define REFERENCE_SAMPLES 10U
+#define REFERENCE_MAX_ATTEMPTS 100U
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus
