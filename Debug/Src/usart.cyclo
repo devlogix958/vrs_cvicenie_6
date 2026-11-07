@@ -1,0 +1,10 @@
+../Drivers/STM32F3xx_HAL_Driver/Inc/stm32f3xx_ll_bus.h:303:22:LL_AHB1_GRP1_EnableClock	1
+../Drivers/STM32F3xx_HAL_Driver/Inc/stm32f3xx_ll_bus.h:553:22:LL_APB1_GRP1_EnableClock	1
+../Drivers/STM32F3xx_HAL_Driver/Inc/stm32f3xx_ll_usart.h:543:22:LL_USART_Enable	1
+../Drivers/STM32F3xx_HAL_Driver/Inc/stm32f3xx_ll_usart.h:2262:22:LL_USART_ConfigAsyncMode	1
+../Drivers/STM32F3xx_HAL_Driver/Inc/stm32f3xx_ll_usart.h:2586:26:LL_USART_IsActiveFlag_TC	1
+../Drivers/STM32F3xx_HAL_Driver/Inc/stm32f3xx_ll_usart.h:2597:26:LL_USART_IsActiveFlag_TXE	1
+../Drivers/STM32F3xx_HAL_Driver/Inc/stm32f3xx_ll_usart.h:3191:22:LL_USART_DisableIT_CTS	1
+../Drivers/STM32F3xx_HAL_Driver/Inc/stm32f3xx_ll_usart.h:3523:22:LL_USART_TransmitData8	1
+../Src/usart.c:29:6:MX_USART2_UART_Init	1
+../Src/usart.c:65:6:USART2_SendString	4

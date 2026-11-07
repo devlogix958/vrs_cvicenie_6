@@ -21,11 +21,14 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "i2c.h"
+#include "usart.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <stdio.h>
+#include "hts221.h"
+#include "lps25hb.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -46,13 +49,29 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
+static const HTS221_Interface_t hts221_interface =
+{
+	i2c_master_read_byte,
+	i2c_master_write_byte,
+	i2c_master_read_multi,
+	i2c_master_write_multi
+};
 
+static const LPS25HB_Interface_t lps25hb_interface =
+{
+	i2c_master_read_byte,
+	i2c_master_write_byte,
+	i2c_master_read_multi,
+	i2c_master_write_multi
+};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
-
+static int32_t round_scaled(float value, int32_t scale);
+static void format_fixed(char *buffer, uint32_t size, int32_t scaled_value, uint8_t decimals);
+static uint8_t measure_reference_pressure(float *reference_pressure);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -95,8 +114,32 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_I2C1_Init();
+  MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
 
+
+  float reference_pressure = 0.0f;
+
+  HTS221_RegisterInterface(&hts221_interface);
+  LPS25HB_RegisterInterface(&lps25hb_interface);
+
+  while(HTS221_Init() != HTS221_OK)
+  {
+	  USART2_SendString("HTS221 init error\r\n");
+	  LL_mDelay(1000);
+  }
+
+  while(LPS25HB_Init() != LPS25HB_OK)
+  {
+	  USART2_SendString("LPS25HB init error\r\n");
+	  LL_mDelay(1000);
+  }
+
+  while(measure_reference_pressure(&reference_pressure) != 0U)
+  {
+	  USART2_SendString("Reference pressure error\r\n");
+	  LL_mDelay(1000);
+  }
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -106,6 +149,28 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+	  float temperature,humidity, pressure,height;
+
+	  if((HTS221_ReadTemperature(&temperature) == HTS221_OK) && (HTS221_ReadHumidity(&humidity) == HTS221_OK) && (LPS25HB_ReadPressure(&pressure) == LPS25HB_OK))
+	  {
+		  char temperature_text[16];
+		  char humidity_text[16];
+		  char pressure_text[16];
+		  char height_text[16];
+		  char line[80];
+
+		  height = LPS25HB_CalcRelativeHeight(pressure, reference_pressure);
+
+		  format_fixed(temperature_text, sizeof(temperature_text), round_scaled(temperature, 10), 1);
+		  format_fixed(humidity_text, sizeof(humidity_text), round_scaled(humidity, 1), 0);
+		  format_fixed(pressure_text, sizeof(pressure_text), round_scaled(pressure, 100), 2);
+		  format_fixed(height_text, sizeof(height_text), round_scaled(height, 100), 2);
+
+		  snprintf(line, sizeof(line), "%s,%s,%s,%s\r\n", temperature_text, humidity_text, pressure_text, height_text);
+		  USART2_SendString(line);
+	  }
+
+	  LL_mDelay(MEASURE_PERIOD_MS);
   }
   /* USER CODE END 3 */
 }
@@ -147,7 +212,94 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+static int32_t round_scaled(float value, int32_t scale){
+	float scaled = value * (float)scale;
 
+	if(scaled >= 0.0f){
+		return (int32_t)(scaled + 0.5f);
+	}
+    return (int32_t)(scaled - 0.5f);
+}
+
+
+static void format_fixed(char *buffer, uint32_t size, int32_t scaled_value, uint8_t decimals)
+{
+	const char *sign = "";
+	uint32_t magnitude;
+	uint32_t divisor = 1U;
+
+	if(scaled_value < 0){
+		sign = "-";
+		magnitude = (uint32_t)(-scaled_value);
+	}
+	else{
+		magnitude = (uint32_t)scaled_value;
+	}
+
+	for(uint8_t i = 0; i < decimals; i++){
+		divisor *= 10U;
+	}
+
+	if(decimals == 0U){
+		snprintf(buffer, size, "%s%lu", sign, (unsigned long)magnitude);
+	}
+	else if(decimals == 1U){
+		snprintf(buffer, size, "%s%lu.%lu", sign, (unsigned long)(magnitude / divisor), (unsigned long)(magnitude % divisor));
+	}
+	else{
+		snprintf(buffer, size, "%s%lu.%02lu", sign, (unsigned long)(magnitude / divisor), (unsigned long)(magnitude % divisor));
+	}
+}
+
+
+
+static uint8_t measure_reference_pressure(float *reference_pressure)
+{
+	float sum = 0.0f;
+	float minimum = 0.0f;
+	float maximum = 0.0f;
+	float pressure;
+	uint32_t samples = 0U;
+	uint32_t skipped = 0U;
+
+	for(uint32_t attempt = 0U; attempt < REFERENCE_MAX_ATTEMPTS; attempt++)
+	{
+		if(LPS25HB_ReadPressure(&pressure) == LPS25HB_OK){
+			if(skipped < 5U){
+				skipped++;
+			}
+			else{
+				if(samples == 0U){
+					minimum = pressure;
+					maximum = pressure;
+					sum = 0.0f;
+				}
+
+				if(pressure < minimum){
+					minimum = pressure;
+				}
+				if(pressure > maximum){
+					maximum = pressure;
+				}
+
+				sum += pressure;
+				samples++;
+
+				if((maximum - minimum) > 1.0f){
+					samples = 0U;
+				}
+				else if(samples >= REFERENCE_SAMPLES){
+					*reference_pressure = sum / (float)samples;
+					return 0U;
+				}
+			}
+		}
+
+		LL_mDelay(MEASURE_PERIOD_MS);
+	}
+
+	return 1U;
+}
 /* USER CODE END 4 */
 
 /**

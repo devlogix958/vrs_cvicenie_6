@@ -1,0 +1,10 @@
+../HTS221/hts221.c:18:16:hts221_make_int16	1
+../HTS221/hts221.c:22:16:hts221_interface_ready	5
+../HTS221/hts221.c:26:16:hts221_read_calibration	4
+../HTS221/hts221.c:58:16:hts221_write_verified	4
+../HTS221/hts221.c:76:6:HTS221_RegisterInterface	2
+../HTS221/hts221.c:82:9:HTS221_ReadRegister	3
+../HTS221/hts221.c:94:9:HTS221_WriteRegister	3
+../HTS221/hts221.c:106:9:HTS221_Init	8
+../HTS221/hts221.c:153:9:HTS221_ReadTemperature	5
+../HTS221/hts221.c:190:9:HTS221_ReadHumidity	7

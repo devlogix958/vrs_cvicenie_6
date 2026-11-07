@@ -21,13 +21,86 @@
 #include "i2c.h"
 
 /* USER CODE BEGIN 0 */
-uint8_t i2c_rx_data = 0;
 
+
+static uint32_t i2c_flag_is_set(i2c_wait_t flag){
+	switch(flag)
+	{
+	case I2C_WAIT_TXIS:
+		return LL_I2C_IsActiveFlag_TXIS(I2C1);
+	case I2C_WAIT_RXNE:
+		return LL_I2C_IsActiveFlag_RXNE(I2C1);
+	case I2C_WAIT_TC:
+		return LL_I2C_IsActiveFlag_TC(I2C1);
+	default:
+		return LL_I2C_IsActiveFlag_STOP(I2C1);
+	}
+}
+
+
+
+static void i2c_recover(void){
+	LL_I2C_Disable(I2C1);
+	LL_I2C_Enable(I2C1);
+}
+
+
+
+static uint8_t i2c_wait_flag(i2c_wait_t flag){
+	uint32_t timeout = I2C_TIMEOUT;
+
+	while(!i2c_flag_is_set(flag)){
+
+		if(LL_I2C_IsActiveFlag_NACK(I2C1)){
+			return I2C_ERR_NACK;
+		}
+
+		--timeout;
+
+		if(timeout == 0U){
+			return I2C_ERR_TIMEOUT;
+		}
+	}
+
+	return I2C_OK;
+}
+
+
+
+static uint8_t i2c_wait_bus_free(void)
+{
+	uint32_t timeout = I2C_TIMEOUT;
+
+	while(LL_I2C_IsActiveFlag_BUSY(I2C1))
+	{
+		--timeout;
+
+		if(timeout == 0U)
+		{
+			return I2C_ERR_TIMEOUT;
+		}
+	}
+
+	return I2C_OK;
+}
+
+
+
+static uint8_t i2c_finish(uint8_t status)
+{
+	if(status == I2C_OK){
+		LL_I2C_ClearFlag_STOP(I2C1);
+	}
+	else{
+		i2c_recover();
+	}
+
+	return status;
+}
 /* USER CODE END 0 */
 
 /* I2C1 init function */
-void MX_I2C1_Init(void)
-{
+void MX_I2C1_Init(void){
   LL_I2C_InitTypeDef I2C_InitStruct = {0};
 
   LL_GPIO_InitTypeDef GPIO_InitStruct = {0};
@@ -70,8 +143,115 @@ void MX_I2C1_Init(void)
 
 }
 
-/* USER CODE BEGIN 1 */
 
+
+/* USER CODE BEGIN 1 */
+uint8_t i2c_master_read_multi(uint8_t slave_address, uint8_t register_address, uint8_t *data, uint8_t length){
+	uint8_t status;
+	uint8_t address = (uint8_t)(slave_address << 1);
+
+	if((data == 0) || (length == 0U) || (length > I2C_MAX_TRANSFER))
+	{
+		return I2C_ERR_PARAM;
+	}
+
+	status = i2c_wait_bus_free();
+	if(status != I2C_OK)
+	{
+		return i2c_finish(status);
+	}
+
+	LL_I2C_HandleTransfer(I2C1, address, LL_I2C_ADDRSLAVE_7BIT, 1, LL_I2C_MODE_SOFTEND, LL_I2C_GENERATE_START_WRITE);
+
+	status = i2c_wait_flag(I2C_WAIT_TXIS);
+	if(status != I2C_OK)
+	{
+		return i2c_finish(status);
+	}
+	LL_I2C_TransmitData8(I2C1, register_address);
+
+	status = i2c_wait_flag(I2C_WAIT_TC);
+	if(status != I2C_OK)
+	{
+		return i2c_finish(status);
+	}
+
+	LL_I2C_HandleTransfer(I2C1, address, LL_I2C_ADDRSLAVE_7BIT, length, LL_I2C_MODE_AUTOEND, LL_I2C_GENERATE_RESTART_7BIT_READ);
+
+	for(uint8_t i = 0; i < length; i++)
+	{
+		status = i2c_wait_flag(I2C_WAIT_RXNE);
+		if(status != I2C_OK)
+		{
+			return i2c_finish(status);
+		}
+		data[i] = LL_I2C_ReceiveData8(I2C1);
+	}
+
+	status = i2c_wait_flag(I2C_WAIT_STOP);
+
+	return i2c_finish(status);
+}
+
+
+
+
+uint8_t i2c_master_read_byte(uint8_t slave_address, uint8_t register_address, uint8_t *data)
+{
+	return i2c_master_read_multi(slave_address, register_address, data, 1);
+}
+
+
+
+
+
+uint8_t i2c_master_write_multi(uint8_t slave_address, uint8_t register_address, const uint8_t *data, uint8_t length)
+{
+	uint8_t status;
+	uint8_t address = (uint8_t)(slave_address << 1);
+
+	if((data == 0) || (length == 0U) || (length > I2C_MAX_TRANSFER))
+	{
+		return I2C_ERR_PARAM;
+	}
+
+	status = i2c_wait_bus_free();
+	if(status != I2C_OK)
+	{
+		return i2c_finish(status);
+	}
+
+	LL_I2C_HandleTransfer(I2C1, address, LL_I2C_ADDRSLAVE_7BIT, (uint32_t)length + 1U, LL_I2C_MODE_AUTOEND, LL_I2C_GENERATE_START_WRITE);
+
+	status = i2c_wait_flag(I2C_WAIT_TXIS);
+	if(status != I2C_OK)
+	{
+		return i2c_finish(status);
+	}
+	LL_I2C_TransmitData8(I2C1, register_address);
+
+	for(uint8_t i = 0; i < length; i++)
+	{
+		status = i2c_wait_flag(I2C_WAIT_TXIS);
+		if(status != I2C_OK)
+		{
+			return i2c_finish(status);
+		}
+		LL_I2C_TransmitData8(I2C1, data[i]);
+	}
+
+	status = i2c_wait_flag(I2C_WAIT_STOP);
+
+	return i2c_finish(status);
+}
+
+
+
+
+uint8_t i2c_master_write_byte(uint8_t slave_address, uint8_t register_address, uint8_t data)
+{
+	return i2c_master_write_multi(slave_address, register_address, &data, 1);
+}
 /* USER CODE END 1 */
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
