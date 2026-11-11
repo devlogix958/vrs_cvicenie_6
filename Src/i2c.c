@@ -168,6 +168,7 @@ uint8_t i2c_master_read_multi(uint8_t slave_address, uint8_t register_address, u
 	{
 		return i2c_finish(status);
 	}
+
 	LL_I2C_TransmitData8(I2C1, register_address);
 
 	status = i2c_wait_flag(I2C_WAIT_TC);
@@ -185,6 +186,7 @@ uint8_t i2c_master_read_multi(uint8_t slave_address, uint8_t register_address, u
 		{
 			return i2c_finish(status);
 		}
+
 		data[i] = LL_I2C_ReceiveData8(I2C1);
 	}
 
@@ -228,6 +230,7 @@ uint8_t i2c_master_write_multi(uint8_t slave_address, uint8_t register_address, 
 	{
 		return i2c_finish(status);
 	}
+
 	LL_I2C_TransmitData8(I2C1, register_address);
 
 	for(uint8_t i = 0; i < length; i++)
